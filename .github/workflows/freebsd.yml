@@ -38,7 +38,8 @@ jobs:
             # root;" into its configuration.  root has no group of that
             # name here, it is in wheel
             TEST_NGINX_WORKER_USER='root wheel' \
-              TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" prove -r t/
+              TEST_NGINX_NO_SHUFFLE=1 \
+            TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" prove -r t/
             # the encoding question is a FreeBSD question: iconv_open is in
             # libc here while the ports tree installs GNU libiconv next to
             # it, so the streaming cases are worth asking on this system too

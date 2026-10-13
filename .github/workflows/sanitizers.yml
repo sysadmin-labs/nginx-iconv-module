@@ -45,6 +45,7 @@ jobs:
         run: |
           set -o pipefail
           ASAN_OPTIONS="$ASAN_OPTIONS:abort_on_error=0" \
+            TEST_NGINX_NO_SHUFFLE=1 \
             TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" \
             prove -r t/ 2>&1 | tee sanitizer.log
 

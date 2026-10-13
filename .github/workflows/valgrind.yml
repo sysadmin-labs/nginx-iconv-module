@@ -36,7 +36,8 @@ jobs:
       - name: Run the test suite under valgrind
         run: |
           set -o pipefail
-          TEST_NGINX_USE_VALGRIND=1 TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" \
+          TEST_NGINX_USE_VALGRIND=1 TEST_NGINX_NO_SHUFFLE=1 \
+            TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" \
             prove -r t/ 2>&1 | tee valgrind.log
 
       - name: No findings allowed

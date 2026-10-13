@@ -51,7 +51,12 @@ jobs:
         run: ci/build.sh '${{ matrix.nginx }}' "$HOME/nginx"
 
       - name: Run the test suite
-        run: TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" prove -r t/
+        run: |
+          # The block order is pinned.  Test::Nginx shuffles by default,
+          # and a block that takes the server down is then reported
+          # against whichever block happened to run after it.
+          TEST_NGINX_NO_SHUFFLE=1 \
+            TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" prove -r t/
 
   dynamic:
     name: loadable module
@@ -75,4 +80,5 @@ jobs:
           done
           echo "loading:$mods"
           TEST_NGINX_LOAD_MODULES="$mods" \
+            TEST_NGINX_NO_SHUFFLE=1 \
             TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" prove -r t/
