@@ -29,7 +29,8 @@ jobs:
         with:
           release: '14'
           prepare: |
-            pkg install -y git pcre2 p5-Test-Nginx
+            # curl is not in the FreeBSD base system, ci/hostile.sh needs it
+            pkg install -y git pcre2 curl p5-Test-Nginx
           run: |
             . .github/versions.env
             ci/build.sh "$NGINX_VERSION" "$HOME/nginx"
@@ -38,4 +39,7 @@ jobs:
             # name here, it is in wheel
             TEST_NGINX_WORKER_USER='root wheel' \
               TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" prove -r t/
-            ci/smoke.sh "$HOME/nginx/sbin/nginx"
+            # the encoding question is a FreeBSD question: iconv_open is in
+            # libc here while the ports tree installs GNU libiconv next to
+            # it, so the streaming cases are worth asking on this system too
+            ci/hostile.sh "$HOME/nginx/sbin/nginx"
