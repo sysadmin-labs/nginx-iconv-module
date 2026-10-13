@@ -1,0 +1,41 @@
+name: Hostile
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    # Monday morning, so a new nginx release that breaks the module shows
+    # up here and not in somebody's build
+    - cron: '59 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hostile:
+    name: an upstream that misbehaves
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The suite in t/ serves files from disk, so it only ever splits a
+    # character where nginx happens to end a file read.  Here the pieces
+    # come off the network seven bytes at a time, the length is sometimes
+    # unknown because the upstream speaks chunked, the upstream sometimes
+    # dies inside a character, and the client sometimes walks away while
+    # the filter still holds an open conversion descriptor.
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+        with:
+          test-nginx: 'false'
+
+      - name: Build nginx
+        run: |
+          . .github/versions.env
+          ci/build.sh "$NGINX_VERSION" "$HOME/nginx"
+
+      - name: Dribbled, chunked, truncated, abandoned
+        run: ci/hostile.sh "$HOME/nginx/sbin/nginx"

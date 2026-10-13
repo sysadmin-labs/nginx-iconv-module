@@ -1,0 +1,108 @@
+ngx_addon_name=ngx_http_iconv_module
+
+# Where iconv(3) lives differs, and on FreeBSD it differs in a way that
+# bites: iconv_open is in libc, but the ports tree also installs GNU
+# libiconv under /usr/local, and nginx puts /usr/local/include on the
+# compile line by itself.  GNU's header then renames iconv_open to
+# libiconv_open behind a #define, the module compiles against those names
+# and the link fails against libc.  LIBICONV_PLUG tells that header to
+# keep its hands off the names, which is what the FreeBSD ports do.
+#
+# The probe therefore carries the same flags the build will, otherwise it
+# answers a question nobody asked.
+
+# CORE_INCS holds bare directory names -- nginx puts the -I in front of
+# each itself, so a -D placed there comes out as "-I -DLIBICONV_PLUG" and
+# the define is silently eaten as the include's argument.  Defines go to
+# CFLAGS, directories to the include list, and nowhere else.
+ngx_iconv_incs=
+ngx_iconv_defs=
+ngx_iconv_libs=
+
+ngx_feature_name=
+ngx_feature_run=no
+ngx_feature_incs="#include <iconv.h>"
+ngx_feature_test="iconv_t cd = iconv_open(\"UTF-8\", \"ISO-8859-1\");
+                  if (cd == (iconv_t) -1) return 1;
+                  iconv_close(cd)"
+
+ngx_iconv_try() {
+    ngx_feature="$1"
+    ngx_feature_path="$2"
+    ngx_feature_libs="$3"
+
+    ngx_iconv_saved_cc=$CC_TEST_FLAGS
+    CC_TEST_FLAGS="$4 $CC_TEST_FLAGS"
+
+    . auto/feature
+
+    CC_TEST_FLAGS=$ngx_iconv_saved_cc
+}
+
+# libc, with the define in place.  Covers glibc, where iconv is in libc and
+# no GNU header is anywhere near, and FreeBSD, where both are true at once.
+ngx_iconv_try "iconv in libc" "" "" "-DLIBICONV_PLUG"
+
+if [ $ngx_found = yes ]; then
+    ngx_iconv_defs="-DLIBICONV_PLUG"
+fi
+
+# GNU libiconv, where the renamed names are the right ones.
+if [ $ngx_found = no ]; then
+    ngx_iconv_try "iconv in libiconv" "" "-liconv" ""
+
+    if [ $ngx_found = yes ]; then
+        ngx_iconv_libs="-liconv"
+    fi
+fi
+
+if [ $ngx_found = no ]; then
+    ngx_iconv_try "iconv in /usr/local" "/usr/local/include" \
+                  "-L/usr/local/lib -liconv" "-I/usr/local/include"
+
+    if [ $ngx_found = yes ]; then
+        ngx_iconv_incs="/usr/local/include"
+        ngx_iconv_libs="-L/usr/local/lib -liconv"
+    fi
+fi
+
+if [ $ngx_found = no ]; then
+    cat << END
+$0: error: ngx_http_iconv_module requires iconv(3).  Install libiconv, or
+point the build at it with --with-cc-opt=-I... and --with-ld-opt=-L...
+END
+    exit 1
+fi
+
+CFLAGS="$CFLAGS $ngx_iconv_defs"
+
+HTTP_ICONV_SRCS="$ngx_addon_dir/src/ngx_http_iconv_module.c"
+
+if test -n "$ngx_module_link"; then
+    ngx_module_type=HTTP_AUX_FILTER
+    ngx_module_name=$ngx_addon_name
+    ngx_module_incs="$ngx_iconv_incs"
+    ngx_module_deps=
+    ngx_module_srcs="$HTTP_ICONV_SRCS"
+
+    # The library belongs to this module alone.  Putting it into CORE_LIBS
+    # is build-global and hangs a libiconv on every other dynamic module of
+    # the same build, which is the mistake the zstd module carried.
+    ngx_module_libs="$ngx_iconv_libs"
+
+    . auto/module
+
+    # auto/module keeps ngx_module_incs and ngx_module_libs per module only
+    # for a dynamic build.  A module compiled into the binary takes the
+    # global ones, and without this the define never reaches its compile
+    # line and the library never reaches the last link step.
+    if [ "$ngx_module_link" != DYNAMIC ]; then
+        CORE_INCS="$CORE_INCS $ngx_iconv_incs"
+        CORE_LIBS="$CORE_LIBS $ngx_iconv_libs"
+    fi
+else
+    HTTP_AUX_FILTER_MODULES="$HTTP_AUX_FILTER_MODULES $ngx_addon_name"
+    NGX_ADDON_SRCS="$NGX_ADDON_SRCS $HTTP_ICONV_SRCS"
+    CORE_INCS="$CORE_INCS $ngx_iconv_incs"
+    CORE_LIBS="$CORE_LIBS $ngx_iconv_libs"
+fi

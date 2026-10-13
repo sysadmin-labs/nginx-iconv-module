@@ -1,0 +1,41 @@
+name: FreeBSD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    # Monday morning, so a new nginx release that breaks the module shows
+    # up here and not in somebody's build
+    - cron: '7 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freebsd:
+    name: build and test in a virtual machine
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # every other workflow measures Linux, and the port this module is
+    # packaged in is a FreeBSD one
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build and run the suite in a FreeBSD virtual machine
+        uses: vmactions/freebsd-vm@v1.5.9
+        with:
+          release: '14'
+          prepare: |
+            pkg install -y git pcre2 p5-Test-Nginx
+          run: |
+            . .github/versions.env
+            ci/build.sh "$NGINX_VERSION" "$HOME/nginx"
+            # the job runs as root, and Test::Nginx then writes "user
+            # root;" into its configuration.  root has no group of that
+            # name here, it is in wheel
+            TEST_NGINX_WORKER_USER='root wheel' \
+              TEST_NGINX_BINARY="$HOME/nginx/sbin/nginx" prove -r t/
+            ci/smoke.sh "$HOME/nginx/sbin/nginx"
